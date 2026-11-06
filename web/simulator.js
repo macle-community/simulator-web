@@ -1,0 +1,510 @@
+// Macle MiniProgram Web Simulator Controller
+(function() {
+  'use strict';
+
+  const DEVICES = [
+    { name: 'Huawei Mate 60 Pro', width: 392, height: 848, dpr: 3, notch: false },
+    { name: 'Huawei Pura 70 Ultra', width: 400, height: 900, dpr: 3, notch: true },
+    { name: 'iPhone 15 Pro', width: 393, height: 852, dpr: 3, notch: true },
+    { name: 'iPhone 14 Pro Max', width: 430, height: 932, dpr: 3, notch: true },
+    { name: 'iPhone 13', width: 390, height: 844, dpr: 3, notch: true },
+    { name: 'iPhone 8 / SE', width: 375, height: 667, dpr: 2, notch: false },
+    { name: 'Nexus 6', width: 412, height: 732, dpr: 3.5, notch: false },
+    { name: 'iPad Pro 11"', width: 834, height: 1194, dpr: 2, notch: false }
+  ];
+
+  let currentDevice = DEVICES[0];
+  let currentScale = 1.0;
+  let isLandscape = false;
+  let touchEnabled = false;
+  let autoReloadEnabled = true;
+  let projectInfo = null;
+  const logs = [];
+  const networkRequests = [];
+
+  // DOM Elements
+  const deviceSelect = document.getElementById('device-select');
+  const pageSelect = document.getElementById('page-select');
+  const scaleSelect = document.getElementById('scale-select');
+  const rotateBtn = document.getElementById('rotate-btn');
+  const refreshBtn = document.getElementById('refresh-btn');
+  const touchBtn = document.getElementById('touch-btn');
+  const networkSelect = document.getElementById('network-select');
+  const qrBtn = document.getElementById('qr-btn');
+  const devtoolsBtn = document.getElementById('devtools-btn');
+  const devtoolsDrawer = document.getElementById('devtools-drawer');
+  const closeDevtoolsBtn = document.getElementById('close-devtools');
+  const clearLogsBtn = document.getElementById('clear-logs');
+  const filterInput = document.getElementById('filter-logs');
+  const logsContainer = document.getElementById('logs-container');
+  const evalInput = document.getElementById('eval-input');
+  const evalForm = document.getElementById('eval-form');
+  const deviceWrapper = document.getElementById('device-wrapper');
+  const deviceFrame = document.getElementById('device-frame');
+  const deviceNotch = document.getElementById('device-notch');
+  const simulatorIframe = document.getElementById('simulator-iframe');
+  const touchCursor = document.getElementById('touch-cursor');
+  const pagePathEl = document.getElementById('page-path');
+  const copyPathBtn = document.getElementById('copy-path-btn');
+  const qrModal = document.getElementById('qr-modal');
+  const closeQrModalBtn = document.getElementById('close-qr-modal');
+  const qrcodeContainer = document.getElementById('qrcode-container');
+  const qrUrlEl = document.getElementById('qr-url');
+  const copyQrUrlBtn = document.getElementById('copy-qr-url-btn');
+
+  // DevTools Tabs
+  const devtoolsTabs = document.querySelectorAll('.devtools-tab');
+  const tabPanes = {
+    'console': document.getElementById('tab-console'),
+    'storage': document.getElementById('tab-storage'),
+    'network': document.getElementById('tab-network'),
+    'app-info': document.getElementById('tab-app-info')
+  };
+  const storageBody = document.getElementById('storage-body');
+  const refreshStorageBtn = document.getElementById('refresh-storage-btn');
+  const networkBody = document.getElementById('network-body');
+  const clearNetworkBtn = document.getElementById('clear-network-btn');
+
+  // App Info Elements
+  const infoProjectName = document.getElementById('info-project-name');
+  const infoEngineVersion = document.getElementById('info-engine-version');
+  const infoRuntimeVersion = document.getElementById('info-runtime-version');
+  const infoEntryPage = document.getElementById('info-entry-page');
+  const infoPagesList = document.getElementById('info-pages-list');
+
+  // Populate Device Select
+  DEVICES.forEach((d, idx) => {
+    const opt = document.createElement('option');
+    opt.value = idx;
+    opt.textContent = `${d.name} (${d.width}×${d.height})`;
+    deviceSelect.appendChild(opt);
+  });
+
+  // Apply device size
+  function updateDeviceDimensions() {
+    let w = currentDevice.width;
+    let h = currentDevice.height;
+    if (isLandscape) {
+      const tmp = w; w = h; h = tmp;
+    }
+    deviceFrame.style.width = `${w + 24}px`;
+    deviceFrame.style.height = `${h + 24}px`;
+
+    if (currentDevice.notch && !isLandscape) {
+      deviceNotch.style.display = 'flex';
+    } else {
+      deviceNotch.style.display = 'none';
+    }
+    applyScale();
+  }
+
+  // Apply zoom scale
+  function applyScale() {
+    if (scaleSelect.value === 'fit') {
+      const canvas = document.querySelector('.canvas');
+      const pad = 60;
+      const availW = canvas.clientWidth - pad;
+      const availH = canvas.clientHeight - pad;
+      let w = isLandscape ? currentDevice.height : currentDevice.width;
+      let h = isLandscape ? currentDevice.width : currentDevice.height;
+      const scaleW = availW / (w + 24);
+      const scaleH = availH / (h + 24);
+      currentScale = Math.min(1.0, scaleW, scaleH);
+    } else {
+      currentScale = parseFloat(scaleSelect.value);
+    }
+    deviceWrapper.style.transform = `scale(${currentScale})`;
+  }
+
+  // Event Listeners for Controls
+  deviceSelect.addEventListener('change', (e) => {
+    currentDevice = DEVICES[parseInt(e.target.value, 10)];
+    updateDeviceDimensions();
+    sendToSimulator({
+      command: 'SYSTEM_INFO_CHANGE',
+      inputParams: {
+        screenWidth: currentDevice.width,
+        screenHeight: currentDevice.height,
+        pixelRatio: currentDevice.dpr
+      }
+    });
+  });
+
+  scaleSelect.addEventListener('change', applyScale);
+  window.addEventListener('resize', () => {
+    if (scaleSelect.value === 'fit') applyScale();
+  });
+
+  rotateBtn.addEventListener('click', () => {
+    isLandscape = !isLandscape;
+    rotateBtn.classList.toggle('active', isLandscape);
+    updateDeviceDimensions();
+  });
+
+  refreshBtn.addEventListener('click', () => {
+    refreshBtn.classList.add('active');
+    simulatorIframe.src = simulatorIframe.src;
+    setTimeout(() => refreshBtn.classList.remove('active'), 500);
+  });
+
+  // Touch Simulation
+  touchBtn.addEventListener('click', () => {
+    touchEnabled = !touchEnabled;
+    touchBtn.classList.toggle('active', touchEnabled);
+    touchCursor.style.display = touchEnabled ? 'block' : 'none';
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!touchEnabled) return;
+    touchCursor.style.left = `${e.clientX}px`;
+    touchCursor.style.top = `${e.clientY}px`;
+  });
+
+  window.addEventListener('mousedown', (e) => {
+    if (!touchEnabled) return;
+    const ripple = document.createElement('div');
+    ripple.className = 'touch-ripple';
+    ripple.style.left = `${e.clientX}px`;
+    ripple.style.top = `${e.clientY}px`;
+    document.body.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 400);
+  });
+
+  // Network Selection
+  networkSelect.addEventListener('change', (e) => {
+    const net = e.target.value;
+    sendToSimulator({
+      callbackId: 1,
+      command: 'NETWORK_STATUS_CHANGE',
+      inputParams: { type: net }
+    });
+    addLog('info', `Network status changed to: ${net}`);
+  });
+
+  // DevTools Toggle
+  devtoolsBtn.addEventListener('click', () => {
+    devtoolsDrawer.classList.toggle('open');
+    devtoolsBtn.classList.toggle('active', devtoolsDrawer.classList.contains('open'));
+  });
+
+  closeDevtoolsBtn.addEventListener('click', () => {
+    devtoolsDrawer.classList.remove('open');
+    devtoolsBtn.classList.remove('active');
+  });
+
+  clearLogsBtn.addEventListener('click', () => {
+    logs.length = 0;
+    renderLogs();
+  });
+
+  filterInput.addEventListener('input', renderLogs);
+
+  // Tab Switching
+  devtoolsTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      devtoolsTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const targetKey = tab.dataset.tab;
+      Object.keys(tabPanes).forEach(k => {
+        if (tabPanes[k]) {
+          tabPanes[k].style.display = k === targetKey ? (k === 'console' ? 'flex' : 'block') : 'none';
+        }
+      });
+      if (targetKey === 'storage') renderStorage();
+    });
+  });
+
+  // Storage Inspector
+  function renderStorage() {
+    if (!storageBody) return;
+    try {
+      const iframeWin = simulatorIframe.contentWindow;
+      const keys = [];
+      if (iframeWin && iframeWin.localStorage) {
+        for (let i = 0; i < iframeWin.localStorage.length; i++) {
+          const k = iframeWin.localStorage.key(i);
+          keys.push({ key: k, value: iframeWin.localStorage.getItem(k) });
+        }
+      }
+      if (keys.length === 0) {
+        storageBody.innerHTML = '<tr><td colspan="3" style="padding:10px;text-align:center;color:var(--text-muted);">No storage items found</td></tr>';
+        return;
+      }
+      storageBody.innerHTML = '';
+      keys.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--border-color)';
+        tr.innerHTML = `
+          <td style="padding:6px;color:var(--accent-color);">${escapeHtml(item.key)}</td>
+          <td style="padding:6px;color:var(--text-primary);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.value)}</td>
+          <td style="padding:6px;"><button class="tool-btn" style="padding:2px 6px;font-size:10px;" onclick="window.__removeStorage('${escapeHtml(item.key)}')">Delete</button></td>
+        `;
+        storageBody.appendChild(tr);
+      });
+    } catch (e) {
+      storageBody.innerHTML = `<tr><td colspan="3" style="padding:10px;color:var(--danger-color);">${e.message}</td></tr>`;
+    }
+  }
+
+  window.__removeStorage = function(key) {
+    try {
+      const iframeWin = simulatorIframe.contentWindow;
+      if (iframeWin && iframeWin.localStorage) {
+        iframeWin.localStorage.removeItem(key);
+        renderStorage();
+      }
+    } catch (e) {}
+  };
+
+  if (refreshStorageBtn) refreshStorageBtn.addEventListener('click', renderStorage);
+
+  // Network Inspector
+  function addNetworkRequest(method, url, status, time) {
+    networkRequests.push({ method, url, status, time });
+    renderNetwork();
+  }
+
+  function renderNetwork() {
+    if (!networkBody) return;
+    if (networkRequests.length === 0) {
+      networkBody.innerHTML = '<tr><td colspan="4" style="padding:10px;text-align:center;color:var(--text-muted);">No network requests recorded</td></tr>';
+      return;
+    }
+    networkBody.innerHTML = '';
+    networkRequests.forEach(req => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border-color)';
+      const statusColor = (req.status >= 200 && req.status < 300) ? 'var(--success-color)' : 'var(--danger-color)';
+      tr.innerHTML = `
+        <td style="padding:6px;color:var(--accent-color);font-weight:bold;">${req.method}</td>
+        <td style="padding:6px;color:${statusColor};">${req.status}</td>
+        <td style="padding:6px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(req.url)}</td>
+        <td style="padding:6px;color:var(--text-muted);">${req.time}</td>
+      `;
+      networkBody.appendChild(tr);
+    });
+  }
+
+  if (clearNetworkBtn) {
+    clearNetworkBtn.addEventListener('click', () => {
+      networkRequests.length = 0;
+      renderNetwork();
+    });
+  }
+
+  // DevTools JS Evaluator
+  evalForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = evalInput.value.trim();
+    if (!code) return;
+    addLog('info', `> ${code}`);
+    evalInput.value = '';
+    try {
+      const res = simulatorIframe.contentWindow.eval(code);
+      addLog('log', `< ${typeof res === 'object' ? JSON.stringify(res) : String(res)}`);
+    } catch (err) {
+      addLog('error', `< ${err.message}`);
+    }
+  });
+
+  // Logs management
+  function addLog(level, msg) {
+    const time = new Date().toLocaleTimeString();
+    logs.push({ level, msg, time });
+    if (logs.length > 500) logs.shift();
+    renderLogs();
+  }
+
+  function renderLogs() {
+    const filter = filterInput.value.toLowerCase();
+    logsContainer.innerHTML = '';
+    const filtered = logs.filter(l => !filter || l.msg.toLowerCase().includes(filter));
+    filtered.forEach(l => {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `
+        <span class="log-time">${l.time}</span>
+        <span class="log-level ${l.level}">${l.level}</span>
+        <span class="log-msg">${escapeHtml(l.msg)}</span>
+      `;
+      logsContainer.appendChild(entry);
+    });
+    logsContainer.scrollTop = logsContainer.scrollHeight;
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Communication with simulator iframe
+  function sendToSimulator(msg) {
+    try {
+      simulatorIframe.contentWindow.postMessage(msg, '*');
+    } catch (e) {
+      console.warn('Failed to send message to simulator:', e);
+    }
+  }
+
+  window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!data) return;
+
+    // Handle cur-page-res
+    if (data.channel === 'cur-page-res' && data.args && data.args[0]) {
+      const p = data.args[0];
+      pagePathEl.textContent = p;
+      pagePathEl.title = p;
+      if (pageSelect) {
+        pageSelect.value = p;
+      }
+    }
+
+    // Handle miniprogram console logs
+    if (data.type === 'macle-console') {
+      const msg = data.args.join(' ');
+      addLog(data.level, msg);
+    }
+
+    // Handle network requests logging
+    if (data.type === 'macle-network') {
+      addNetworkRequest(data.method || 'GET', data.url, data.status || 200, new Date().toLocaleTimeString());
+    }
+  });
+
+  // Copy Path
+  copyPathBtn.addEventListener('click', () => {
+    const text = pagePathEl.textContent;
+    if (text && text !== '-') {
+      navigator.clipboard.writeText(text).then(() => {
+        copyPathBtn.title = 'Copied!';
+        setTimeout(() => copyPathBtn.title = 'Copy Path', 1500);
+      });
+    }
+  });
+
+  // QR Code Modal
+  qrBtn.addEventListener('click', () => {
+    qrModal.classList.add('open');
+    if (!qrcodeContainer.hasChildNodes() && window.QRCode) {
+      new QRCode(qrcodeContainer, {
+        text: qrUrlEl.textContent,
+        width: 180,
+        height: 180,
+        colorDark: '#0f172a',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+  });
+
+  closeQrModalBtn.addEventListener('click', () => {
+    qrModal.classList.remove('open');
+  });
+
+  copyQrUrlBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(qrUrlEl.textContent).then(() => {
+      copyQrUrlBtn.textContent = 'Copied!';
+      setTimeout(() => copyQrUrlBtn.textContent = 'Copy URL', 1500);
+    });
+  });
+
+  // Setup Live Reload EventSource
+  function setupLiveReload() {
+    if (!window.EventSource) return;
+    try {
+      const es = new EventSource('/api/live-reload');
+      es.onmessage = (e) => {
+        if (e.data === 'reload' && autoReloadEnabled) {
+          addLog('info', 'File change detected, auto-reloading simulator...');
+          simulatorIframe.src = simulatorIframe.src;
+        }
+      };
+      es.onerror = () => {
+        setTimeout(setupLiveReload, 5000);
+      };
+    } catch (e) {
+      console.warn('Live reload unavailable:', e);
+    }
+  }
+
+  // Page Selection
+  if (pageSelect) {
+    pageSelect.addEventListener('change', (e) => {
+      const page = e.target.value;
+      if (!page) return;
+      try {
+        if (simulatorIframe.contentWindow && typeof simulatorIframe.contentWindow.goToPage === 'function') {
+          simulatorIframe.contentWindow.goToPage(page);
+          addLog('info', `Navigated simulator to: ${page}`);
+          return;
+        }
+      } catch (err) {}
+      const proj = projectInfo ? projectInfo.projectName : 'dist';
+      simulatorIframe.src = `/${proj}/root/debug/simulator/index.html?entryPagePath=${encodeURIComponent(page)}`;
+      addLog('info', `Switched entry page to: ${page}`);
+    });
+  }
+
+  function renderAppInfo(info) {
+    if (infoProjectName) infoProjectName.textContent = info.projectName || 'Macle App';
+    if (infoEngineVersion) infoEngineVersion.textContent = info.engineVersion || '26.6.0-LG0001';
+    if (infoRuntimeVersion) infoRuntimeVersion.textContent = info.runtimeVersion || '100.4.2';
+    if (infoEntryPage) infoEntryPage.textContent = info.entryPagePath || 'pages/index/index';
+    if (infoPagesList && Array.isArray(info.pages)) {
+      infoPagesList.innerHTML = '';
+      info.pages.forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = p;
+        infoPagesList.appendChild(li);
+      });
+    }
+  }
+
+  // Initialize
+  function init() {
+    updateDeviceDimensions();
+    setupLiveReload();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetPage = urlParams.get('page') || urlParams.get('entryPagePath');
+    const entryQuery = targetPage ? `?entryPagePath=${encodeURIComponent(targetPage)}` : '';
+
+    // Fetch project info
+    fetch('/api/project-info')
+      .then(res => res.json())
+      .then(info => {
+        projectInfo = info;
+        renderAppInfo(info);
+
+        if (info.pages && Array.isArray(info.pages) && pageSelect) {
+          pageSelect.innerHTML = '';
+          info.pages.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.textContent = p;
+            pageSelect.appendChild(opt);
+          });
+          if (targetPage) pageSelect.value = targetPage;
+        }
+
+        const finalUrl = info.simulatorUrl + entryQuery;
+        simulatorIframe.src = finalUrl;
+        const fullUrl = new URL(finalUrl, window.location.href).href;
+        qrUrlEl.textContent = fullUrl;
+        addLog('info', `Connected to Macle project: ${info.projectName}`);
+        addLog('info', `Dual-thread runtime initialized: ${finalUrl}`);
+      })
+      .catch(err => {
+        const simUrl = `/dist/root/debug/simulator/index.html${entryQuery}`;
+        simulatorIframe.src = simUrl;
+        qrUrlEl.textContent = new URL(simUrl, window.location.href).href;
+        addLog('info', `Loaded fallback simulator at: ${simUrl}`);
+      });
+  }
+
+  window.addEventListener('DOMContentLoaded', init);
+})();

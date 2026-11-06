@@ -1,10 +1,14 @@
 {
-  "name": "macle-web-simulator",
+  "name": "@macle-community/simulator-web",
   "version": "1.0.0",
   "description": "Standalone, zero-electron Web Simulator for Macle MiniPrograms (Taro & Native MAML)",
   "main": "src/server.js",
   "bin": {
-    "macle-web-simulator": "./bin/macle-web-simulator.js"
+    "macle-simulator-web": "bin/macle-web-simulator.js",
+    "macle-web-simulator": "bin/macle-web-simulator.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "start": "node bin/macle-web-simulator.js",
@@ -26,7 +30,7 @@
   "author": "t.tsegaye <t.tsegaye@appdiv.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/natiDotnet/macle-web-simulator.git"
+    "url": "git+https://github.com/natiDotnet/macle-simulator-web.git"
   },
   "engines": {
     "node": ">=16.0.0"

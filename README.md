@@ -1,7 +1,8 @@
-# Macle Web Simulator
+# @macle-community/simulator-web
 
 > Standalone, lightweight, zero-Electron web simulator and developer workbench for Macle MiniPrograms (Taro React/Vue & Native MAML).
 
+[![npm version](https://img.shields.io/npm/v/@macle-community/simulator-web.svg)](https://www.npmjs.com/package/@macle-community/simulator-web)
 [![Engine](https://img.shields.io/badge/Engine-26.6.0--LG0001-blue.svg)](https://www.huawei.com)
 [![Runtime](https://img.shields.io/badge/Runtime-v100.4.2-green.svg)](https://www.huawei.com)
 [![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
@@ -31,23 +32,31 @@
 
 ## 🚀 Quick Start
 
-### 1. Installation & CLI Usage
+### 1. Installation via NPM
 
-You can run the simulator directly with Node.js:
+```bash
+# Global CLI installation
+npm install -g @macle-community/simulator-web
+
+# Or run directly via npx
+npx @macle-community/simulator-web -s ./dist
+```
+
+### 2. Run from Source / Repository
 
 ```bash
 # Clone the repository
-git clone https://github.com/natiDotnet/macle-web-simulator.git
-cd macle-web-simulator
+git clone https://github.com/natiDotnet/macle-simulator-web.git
+cd macle-simulator-web
 
 # Run the web simulator
 node bin/macle-web-simulator.js -s ../sample-project/dist
 ```
 
-### 2. CLI Options
+### 3. CLI Options
 
 ```bash
-macle-web-simulator [options]
+macle-simulator-web [options]
 
 Options:
   -s, --source <path>     Path to compiled (dist) or source Macle project [default: auto-detected]

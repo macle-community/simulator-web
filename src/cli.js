@@ -7,7 +7,7 @@
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
-const { MacleWebSimulatorServer } = require('../src/server');
+const { MacleWebSimulatorServer } = require('./server');
 
 const args = process.argv.slice(2);
 
@@ -17,7 +17,7 @@ Macle MiniProgram Standalone Web Simulator
 Version: 1.0.0 (Engine: 26.6.0-LG0001 / Runtime: v100.4.2)
 
 Usage:
-  macle-web-simulator [options]
+  macle-simulator-web [options]
 
 Options:
   -s, --source <path>     Path to compiled or source Macle project (e.g. sample-project/dist)
@@ -29,9 +29,9 @@ Options:
   -h, --help              Show this help message
 
 Examples:
-  npx macle-web-simulator -s ./sample-project/dist
-  macle-web-simulator -s ./opendoc/miniapp --watch --open
-  macle-web-simulator -p 30005
+  npx @macle-community/simulator-web -s ./sample-project/dist
+  macle-simulator-web -s ./opendoc/miniapp --watch --open
+  macle-simulator-web -p 30005
 `);
   process.exit(0);
 }
@@ -41,7 +41,7 @@ if (args.includes('-h') || args.includes('--help')) {
 }
 
 if (args.includes('-v') || args.includes('--version')) {
-  console.log('macle-web-simulator v1.0.0');
+  console.log('macle-simulator-web v1.0.0');
   console.log('Macle Engine: 26.6.0-LG0001');
   console.log('Framework Runtime: v100.4.2');
   process.exit(0);

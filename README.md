@@ -50,7 +50,7 @@ git clone https://github.com/natiDotnet/macle-simulator-web.git
 cd macle-simulator-web
 
 # Run the web simulator
-node bin/macle-web-simulator.js -s ../sample-project/dist
+node src/cli.js -s ../sample-project/dist
 ```
 
 ### 3. CLI Options
@@ -87,9 +87,8 @@ npm run dev
 
 ```
 macle-web-simulator/
-├── bin/
-│   └── macle-web-simulator.js       # CLI executable
 ├── src/
+│   ├── cli.js                       # CLI executable entry point
 │   ├── server.js                    # Pure Node.js HTTP server & static router
 │   ├── compiler.js                  # @macle/compiler runner
 │   ├── mock-backend.js              # /mcss/simulate/* native Macle backend APIs

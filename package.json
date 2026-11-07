@@ -1,6 +1,6 @@
 {
   "name": "@macle-community/simulator-web",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Standalone, zero-electron Web Simulator for Macle MiniPrograms (Taro & Native MAML)",
   "main": "src/server.js",
   "bin": {
